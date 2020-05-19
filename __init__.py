@@ -1,5 +1,5 @@
 import websocket, json
-from threading import Thread
+from threading import Thread, Event
 from urllib.parse import urlencode
 from .channel import Channel, ChannelEvents
 from collections import namedtuple
@@ -15,18 +15,17 @@ def decode(msg):
 class SentMessage:
   def __init__(self, cb=None):
     self.cb = cb
-    self.set = False
+    self.event = Event()
     self.message = None
 
   def respond(self, message):
-    self.set = True
     self.message = message
     if self.cb is not None:
       self.cb(message)
+    self.event.set()
 
   def wait_for_response(self):
-    while not self.set:
-      pass
+    self.event.wait()
 
     return self.message
 
