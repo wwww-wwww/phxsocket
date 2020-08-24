@@ -7,6 +7,9 @@ class ChannelEvents(Enum):
   reply = "phx_reply"
   leave = "phx_leave"
 
+class ChannelConnectException(Exception):
+  pass
+
 class Channel:
   def __init__(self, socket, topic, params):
     self.socket = socket
@@ -24,23 +27,23 @@ class Channel:
     try:
       response = join.wait_for_response()
       if response["status"] == "ok":
-        return True, response["response"]
+        return response["response"]
       else:
-        return False, response["response"]
+        raise ChannelConnectException(response["response"])
     except:
-      return False, response["response"]
+      raise ChannelConnectException(response["response"])
 
   def leave(self):
     leave = self.socket.send_message(
-      self.topic, ChannelEvents.leave.value, self.params
+      self.topic, ChannelEvents.leave.value, self.params, reply=True
     )
     try:
       return True, leave.response()
     except Exception as e:
       return False, "Failed to leave?"
 
-  def push(self, event, payload, cb=None):
-    msg = self.socket.send_message(self.topic, event, payload, cb)
+  def push(self, event, payload, cb=None, reply=False):
+    msg = self.socket.send_message(self.topic, event, payload, cb, reply)
     return msg
 
   def on(self, event, cb):

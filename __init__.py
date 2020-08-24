@@ -20,13 +20,12 @@ class SentMessage:
 
   def respond(self, message):
     self.message = message
-    if self.cb is not None:
+    if self.cb:
       self.cb(message)
     self.event.set()
 
   def wait_for_response(self):
     self.event.wait()
-
     return self.message
 
 class Socket:
@@ -52,13 +51,13 @@ class Socket:
     )
 
     self.thread = None
-  
+    self.connect_event = Event()
+
   def _on_message(self, ws, _message):
     message = decode(_message)
 
     if message.event == ChannelEvents.reply.value and message.ref in self.messages:
       self.messages[message.ref].respond(message.payload)
-      del self.messages[message.ref]
     else:
       channel = self.channels.get(message.topic)
       if channel:
@@ -66,25 +65,29 @@ class Socket:
       else:
         print("socket", "unknown message", message)
 
+    if message.ref in self.messages:
+      del self.messages[message.ref]
+
     if self.on_message is not None:
-      self.on_message(self, message)
-  
+      Thread(target=lambda: self.on_message(self, message), daemon=True).start()
+
   def _on_error(self, ws, message):
     if self.on_error is not None:
       self.on_error(self, message)
-  
+    self.connect_event.set()
+
   def _on_close(self, ws):
     if self.on_close is not None:
       self.on_close(self)
 
   def _on_open(self, ws):
     if self.on_open is not None:
-      Thread(target=lambda: self.on_open(self), daemon=True).start()
+      Thread(target=lambda: (self.on_open(self), self.connect_event.set()), daemon=True).start()
 
   def _run(self):
     self.websocket.run_forever(ping_interval=15)
 
-  def send_message(self, topic, event, payload, cb=None):
+  def send_message(self, topic, event, payload, cb=None, reply=False):
     message = json.dumps(
     {
       "event": event,
@@ -95,13 +98,15 @@ class Socket:
 
     sent_message = SentMessage(cb)
 
-    self.messages[self._ref] = sent_message
+    if reply or cb:
+      self.messages[self._ref] = sent_message
 
     self.websocket.send(message)
 
     self._ref = self._ref + 1
-
-    return sent_message
+    
+    if reply or cb:
+      return sent_message
 
   def close(self):
     self.websocket.close()
@@ -110,7 +115,10 @@ class Socket:
     self.thread = Thread(target=self._run, daemon=True)
     self.thread.start()
 
-  def channel(self, topic, params):
+  def channel(self, topic, params={}):
     channel = Channel(self, topic, params)
     self.channels[topic] = channel
     return channel
+
+  def after_connect(self):
+    self.connect_event.wait()
