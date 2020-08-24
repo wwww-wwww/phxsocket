@@ -21,7 +21,7 @@ class Channel:
 
   def join(self):
     join = self.socket.send_message(
-      self.topic, ChannelEvents.join.value, self.params
+      self.topic, ChannelEvents.join.value, self.params, reply=True
     )
     
     try:
