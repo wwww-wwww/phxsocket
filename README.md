@@ -1,33 +1,36 @@
 # phxsocket
-### synchronous websocket client using callbacks
+### Synchronous phoenix websocket client using callbacks
 [Phoenix channels](https://hexdocs.pm/phoenix/channels.html)
-## requirements
+## Requirements
 `websocket_client`
 
-## usage
-import the package
+## Usage
+Import the package
 ```python
-from phxsocket import Socket
+import phxsocket
 ```
 
-create a socket
+Create socket client
 ```python
-socket = Socket("wss://target.url/websocket", {"options": "something"})
+socket = phxsocket.Client("wss://target.url/websocket", {"options": "something"})
 ```
 
-connect and join a channel
+Connect and join a channel
 ```python
 def on_open(socket):
   channel = socket.channel("room:roomname", {"more options": "something else"})
   
   join_success, resp = self.channel.join()
 
+def reconnect():
+  socket.connect()
+
 socket.on_open = on_open
-socket.on_error = lambda socket, message: (print(message), self.reconnect())
+socket.on_error = lambda socket, message: (print(message), reconnect())
 socket.connect()
 ```
 
-subscribe to events
+Subscribe to events
 ```python
 def do_something(payload):
   thing = payload["thing"]
@@ -35,28 +38,31 @@ def do_something(payload):
 channel.on("eventname", do_something)
 ```
 
-push data to a channel
+Push data to a channel
 ```python
 channel.push("eventname", {"some": "data"})
 ```
 
-push data and wait for a response
+Push data and wait for a response
 ```python
-message = channel.push("eventname", {"some": "data"})
+message = channel.push("eventname", {"some": "data"}, reply=True)
 response = message.wait_for_response() # blocking
 ```
 
-push data and react to the response with a callback
+Push data and react to the response with a callback
 ```python
-channel.push("eventname", {"some": "data"}, lambda payload: print(payload))
+def respond(payload):
+  print(payload)
+
+channel.push("eventname", {"some": "data"}, respond)
 ```
 
-leave a channel
+Leave a channel
 ```python
 channel.leave()
 ```
 
-disconnect
+Disconnect
 ```python
 socket.close()
 ```
