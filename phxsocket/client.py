@@ -1,16 +1,9 @@
-import websocket, json
+import websocket, json, logging, traceback
 from threading import Thread, Event
 from urllib.parse import urlencode
 from .channel import Channel, ChannelEvents
-from collections import namedtuple
+from . import Message
 
-Message = namedtuple(
-  "Message", ["event", "topic", "payload", "ref"]
-)
-
-def decode(msg):
-  msg = json.loads(msg)
-  return Message(msg["event"], msg["topic"], msg["payload"], msg["ref"])
 
 class SentMessage:
   def __init__(self, cb=None):
@@ -28,7 +21,8 @@ class SentMessage:
     self.event.wait()
     return self.message
 
-class Socket:
+
+class Client:
   def __init__(self, url, params):
     qs_params = {"vsn": "1.0.0", **params}
     self.url = url + "?" + urlencode(qs_params)
@@ -44,17 +38,18 @@ class Socket:
     self.on_close = None
     self.websocket = websocket.WebSocketApp(
       self.url,
-      on_message=lambda ws, message: self._on_message(ws, message),
-      on_error=lambda ws, error: self._on_error(ws, error),
-      on_close=lambda ws: self._on_close(ws),
-      on_open=lambda ws: self._on_open(ws)
-    )
+      on_message=self._on_message,
+      on_error=self._on_error,
+      on_close=self._on_close,
+      on_open=lambda ws: Thread(target=self._on_open, daemon=True).start())
 
     self.thread = None
     self.connect_event = Event()
+    self.on_open_exc = None
 
   def _on_message(self, ws, _message):
-    message = decode(_message)
+    message = Message.from_json(_message)
+    logging.info("socket", message)
 
     if message.event == ChannelEvents.reply.value and message.ref in self.messages:
       self.messages[message.ref].respond(message.payload)
@@ -63,13 +58,13 @@ class Socket:
       if channel:
         channel.receive(self, message)
       else:
-        print("socket", "unknown message", message)
+        logging.info("socket", "unknown message", message)
 
     if message.ref in self.messages:
       del self.messages[message.ref]
 
     if self.on_message is not None:
-      Thread(target=lambda: self.on_message(self, message), daemon=True).start()
+      Thread(target=self.on_message, args=[message], daemon=True).start()
 
   def _on_error(self, ws, message):
     if self.on_error is not None:
@@ -81,15 +76,25 @@ class Socket:
       self.on_close(self)
 
   def _on_open(self, ws):
-    if self.on_open is not None:
-      Thread(target=lambda: (self.on_open(self), self.connect_event.set()), daemon=True).start()
+    try:
+      if self.on_open is not None:
+        self.on_open(self)
+    except Exception as e:
+      self.on_open_exc = e
+    finally:
+      self.connect_event.set()
 
   def _run(self):
-    self.websocket.run_forever(ping_interval=15)
+    try:
+      self.websocket.run_forever(ping_interval=15)
+    except:
+      logging.error(traceback.format_exc())
 
-  def send_message(self, topic, event, payload, cb=None, reply=False):
-    message = json.dumps(
-    {
+  def push(self, topic, event, payload, cb=None, reply=False):
+    if type(event) == ChannelEvents:
+      event = event.value
+
+    message = json.dumps({
       "event": event,
       "topic": topic,
       "ref": self._ref,
@@ -104,7 +109,7 @@ class Socket:
     self.websocket.send(message)
 
     self._ref = self._ref + 1
-    
+
     if reply or cb:
       return sent_message
 
@@ -116,9 +121,13 @@ class Socket:
     self.thread.start()
 
   def channel(self, topic, params={}):
-    channel = Channel(self, topic, params)
-    self.channels[topic] = channel
-    return channel
+    if topic not in channel:
+      channel = Channel(self, topic, params)
+      self.channels[topic] = channel
+
+    return self.channels[topic]
 
   def after_connect(self):
     self.connect_event.wait()
+    if self.on_open_exc:
+      raise self.on_open_exc
