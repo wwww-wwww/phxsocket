@@ -75,7 +75,7 @@ class Client:
     if self.on_close is not None:
       self.on_close(self)
 
-  def _on_open(self, ws):
+  def _on_open(self):
     try:
       if self.on_open is not None:
         self.on_open(self)
