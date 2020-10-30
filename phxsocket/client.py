@@ -2,7 +2,7 @@ import websocket, json, logging, traceback
 from threading import Thread, Event
 from urllib.parse import urlencode
 from .channel import Channel, ChannelEvents
-from . import Message
+from .message import Message
 
 
 class SentMessage:
@@ -38,16 +38,16 @@ class Client:
     self.on_close = None
     self.websocket = websocket.WebSocketApp(
       self.url,
-      on_message=self._on_message,
-      on_error=self._on_error,
-      on_close=self._on_close,
+      on_message=lambda ws, message: self._on_message(message),
+      on_error=lambda ws, message: self._on_error(message),
+      on_close=lambda ws: self._on_close(),
       on_open=lambda ws: Thread(target=self._on_open, daemon=True).start())
 
     self.thread = None
     self.connect_event = Event()
     self.on_open_exc = None
 
-  def _on_message(self, ws, _message):
+  def _on_message(self, _message):
     message = Message.from_json(_message)
     logging.info("socket", message)
 
@@ -66,12 +66,12 @@ class Client:
     if self.on_message is not None:
       Thread(target=self.on_message, args=[message], daemon=True).start()
 
-  def _on_error(self, ws, message):
+  def _on_error(self, message):
     if self.on_error is not None:
       self.on_error(self, message)
     self.connect_event.set()
 
-  def _on_close(self, ws):
+  def _on_close(self):
     if self.on_close is not None:
       self.on_close(self)
 
@@ -121,7 +121,7 @@ class Client:
     self.thread.start()
 
   def channel(self, topic, params={}):
-    if topic not in channel:
+    if topic not in self.channels:
       channel = Channel(self, topic, params)
       self.channels[topic] = channel
 
