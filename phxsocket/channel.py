@@ -47,9 +47,6 @@ class Channel:
       return False, traceback.format_exc()
 
   def push(self, event, payload, cb=None, reply=False):
-    if event != "update_workers":
-      logging.info("socket", "push", event, payload)
-
     msg = self.socket.push(self.topic, event, payload, cb, reply)
     return msg
 

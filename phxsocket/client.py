@@ -49,7 +49,6 @@ class Client:
 
   def _on_message(self, _message):
     message = Message.from_json(_message)
-    logging.info("socket", message)
 
     if message.event == ChannelEvents.reply.value and message.ref in self.messages:
       self.messages[message.ref].respond(message.payload)
@@ -58,26 +57,32 @@ class Client:
       if channel:
         channel.receive(self, message)
       else:
-        logging.info("socket", "unknown message", message)
+        logging.info("socket: unknown message: {}".format(message))
 
     if message.ref in self.messages:
       del self.messages[message.ref]
 
-    if self.on_message is not None:
+    if self.on_message:
       Thread(target=self.on_message, args=[message], daemon=True).start()
 
   def _on_error(self, message):
-    if self.on_error is not None:
-      self.on_error(self, message)
+    if self.on_error:
+      try:
+        self.on_error(self, message)
+      except:
+        logging.error(traceback.format_exc())
     self.connect_event.set()
 
   def _on_close(self):
-    if self.on_close is not None:
-      self.on_close(self)
+    if self.on_close:
+      try:
+        self.on_close(self)
+      except:
+        logging.error(traceback.format_exc())
 
   def _on_open(self):
     try:
-      if self.on_open is not None:
+      if self.on_open:
         self.on_open(self)
     except Exception as e:
       self.on_open_exc = e
