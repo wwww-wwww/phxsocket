@@ -29,12 +29,11 @@ class Channel:
                             self.params,
                             reply=True)
 
-    try:
-      response = join.wait_for_response()
-      assert response["status"] == "ok"
-      return response["response"]
-    except:
+    response = join.wait_for_response()
+    if response["status"] != "ok":
       raise ChannelConnectError(response["response"])
+
+    return response["response"]
 
   def leave(self):
     leave = self.socket.push(self.topic,
