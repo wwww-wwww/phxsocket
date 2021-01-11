@@ -23,6 +23,23 @@ class SentMessage:
 
 
 class ClientConnection(SentMessage):
+  def __init__(self, client):
+    super().__init__()
+    self.client = client
+
+  def on_open(self):
+    try:
+      self.client.on_open(self.client)
+      self.event.set()
+    except Exception as e:
+      self.respond(e)
+
+  def respond(self, message):
+    if not message and self.client.on_open:
+      Thread(target=self.on_open, daemon=True).start()
+    else:
+      super().respond(message)
+
   def wait(self):
     self.event.wait()
     if self.message:
@@ -78,8 +95,6 @@ class Client:
   async def _run(self, loop, send_queue, connect_evt, shutdown_evt):
     async with websockets.connect(self.url) as websocket:
       connect_evt.respond(None)
-      if self.on_open:
-        self.on_open(self)
       loop.create_task(self._listen(websocket))
       loop.create_task(self._broadcast(websocket, send_queue))
       await shutdown_evt.wait()
@@ -131,7 +146,7 @@ class Client:
       logging.error("phxsocket: Trying to start another thread")
       return False
 
-    connect_evt = ClientConnection()
+    connect_evt = ClientConnection(self)
     self.thread = Thread(target=self.run, args=[connect_evt], daemon=True)
     self.thread.start()
 
@@ -187,5 +202,7 @@ class Client:
     if topic not in self.channels:
       channel = Channel(self, topic, params)
       self.channels[topic] = channel
+    else:
+      self.channels[topic].params = params
 
     return self.channels[topic]
