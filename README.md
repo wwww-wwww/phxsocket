@@ -2,7 +2,7 @@
 ### Synchronous phoenix websocket client using callbacks
 [Phoenix channels](https://hexdocs.pm/phoenix/channels.html)
 ## Requirements
-`websocket_client`
+`websockets`
 
 ## Usage
 Import the package
@@ -17,17 +17,26 @@ socket = phxsocket.Client("wss://target.url/websocket", {"options": "something"}
 
 Connect and join a channel
 ```python
-def on_open(socket):
+if socket.connect(): # blocking, raises exception on failure
   channel = socket.channel("room:roomname", {"more options": "something else"})
+  join_success, resp = channel.join()
+```
+
+Alternatively
+```python
+def connect_to_channel(socket):
+  channel = socket.channel("room:roomname", {"more options": "something else"})
+  join_success, resp = channel.join()
   
-  join_success, resp = self.channel.join()
+socket.on_open = connect_to_channel
+connection = socket.connect(blocking=False)
 
-def reconnect():
-  socket.connect()
+connection.wait() # blocking, raises exception on failure
+```
 
-socket.on_open = on_open
-socket.on_error = lambda socket, message: (print(message), reconnect())
-socket.connect()
+Reconnect on disconnection
+```python
+socket.on_close = lambda socket: socket.connect()
 ```
 
 Subscribe to events
