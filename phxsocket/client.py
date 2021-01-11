@@ -55,8 +55,10 @@ class Client:
 
     self._send_queue = None
 
-  def set_params(self, params):
+  def set_params(self, params, url=None):
     qs_params = {"vsn": "1.0.0", **params}
+    if url:
+      self._url = url
     self.url = f"{self._url}?{urlencode(qs_params)}"
 
   async def _listen(self, websocket):
