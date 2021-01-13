@@ -5,6 +5,10 @@ from .channel import Channel, ChannelEvents
 from .message import Message
 
 
+class SocketClosedError(Exception):
+  pass
+
+
 class SentMessage:
   def __init__(self, cb=None):
     self.cb = cb
@@ -79,25 +83,34 @@ class Client:
     self.url = f"{self._url}?{urlencode(qs_params)}"
 
   async def _listen(self, websocket):
-    async for msg in websocket:
-      self._on_message(msg)
+    try:
+      async for msg in websocket:
+        self._on_message(msg)
+    except:
+      pass
 
   async def _send(self, message):
     await self._send_queue.put(message)
 
   async def _broadcast(self, websocket, send_queue):
-    while websocket.state == websockets.protocol.State.OPEN:
-      message = await send_queue.get()
-      if message:
-        await websocket.send(message)
-      send_queue.task_done()
+    try:
+      while websocket.state == websockets.protocol.State.OPEN:
+        message = await send_queue.get()
+        if message:
+          await websocket.send(message)
+        send_queue.task_done()
+    except:
+      pass
 
   async def _run(self, loop, send_queue, connect_evt, shutdown_evt):
     async with websockets.connect(self.url) as websocket:
       connect_evt.respond(None)
-      loop.create_task(self._listen(websocket))
       loop.create_task(self._broadcast(websocket, send_queue))
-      await shutdown_evt.wait()
+      listen = loop.create_task(self._listen(websocket))
+      shutdown = loop.create_task(shutdown_evt.wait())
+      await asyncio.wait({listen, shutdown},
+                         return_when=asyncio.FIRST_COMPLETED,
+                         loop=loop)
 
   def run(self, connect_evt):
     self._loop = loop = asyncio.new_event_loop()
@@ -136,8 +149,8 @@ class Client:
 
   def close(self):
     if not self._loop:
-      logging.error("phxsocket: No loop found")
-      return
+      raise SocketClosedError
+
     self._loop.call_soon_threadsafe(self._shutdown_evt.set)
     self.thread.join()
 
@@ -174,6 +187,9 @@ class Client:
       Thread(target=self.on_message, args=[message], daemon=True).start()
 
   def push(self, topic, event, payload, cb=None, reply=False):
+    if not self._loop:
+      raise SocketClosedError
+
     if type(event) == ChannelEvents:
       event = event.value
 
