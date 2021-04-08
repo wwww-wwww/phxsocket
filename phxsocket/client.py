@@ -100,15 +100,15 @@ class Client:
           await websocket.send(message)
         send_queue.task_done()
     except:
-      pass
+      logging.error("phxsocket: FATAL ERROR: " + traceback.format_exc())
 
   async def _run(self, loop, send_queue, connect_evt, shutdown_evt):
     async with websockets.connect(self.url) as websocket:
       connect_evt.respond(None)
-      loop.create_task(self._broadcast(websocket, send_queue))
+      broadcast = loop.create_task(self._broadcast(websocket, send_queue))
       listen = loop.create_task(self._listen(websocket))
       shutdown = loop.create_task(shutdown_evt.wait())
-      await asyncio.wait({listen, shutdown},
+      await asyncio.wait({listen, shutdown, broadcast},
                          return_when=asyncio.FIRST_COMPLETED,
                          loop=loop)
 
@@ -118,8 +118,6 @@ class Client:
 
     self._send_queue = asyncio.Queue()
     self._shutdown_evt = asyncio.Event()
-
-    tasks_pending = []
 
     try:
       loop.run_until_complete(
@@ -140,12 +138,8 @@ class Client:
       loop.close()
       self._loop = None
 
-      Thread(target=self._on_close, args=[connect_evt], daemon=True).start()
-
-  def _on_close(self, connect_evt):
-    self.thread.join()
-    if connect_evt.is_set() and self.on_close:
-      self.on_close(self)
+      if connect_evt.is_set() and self.on_close:
+        self.on_close(self)
 
   def close(self):
     if not self._loop:
