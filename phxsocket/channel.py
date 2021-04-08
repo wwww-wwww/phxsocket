@@ -1,5 +1,5 @@
 from enum import Enum
-import logging, traceback
+import traceback
 
 
 class ChannelConnectError(Exception):
