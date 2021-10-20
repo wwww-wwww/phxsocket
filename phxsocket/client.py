@@ -1,29 +1,13 @@
 import asyncio, websockets, json, logging, traceback
-from threading import Event, Thread, Lock
+from threading import Thread, Lock
 from urllib.parse import urlencode
 from .channel import Channel, ChannelEvents
-from .message import Message
+from .message import Message, SentMessage
+from typing import Union, Callable
 
 
 class SocketClosedError(Exception):
   pass
-
-
-class SentMessage:
-  def __init__(self, cb=None):
-    self.cb = cb
-    self.event = Event()
-    self.message = None
-
-  def respond(self, message):
-    self.message = message
-    if self.cb:
-      self.cb(message)
-    self.event.set()
-
-  def wait_for_response(self):
-    self.event.wait()
-    return self.message
 
 
 class ClientConnection(SentMessage):
@@ -55,7 +39,7 @@ class ClientConnection(SentMessage):
 
 
 class Client:
-  def __init__(self, url, params):
+  def __init__(self, url: str, params: dict = {}):
     self._url = url
     self.set_params(params)
     self._loop = None
@@ -76,7 +60,7 @@ class Client:
 
     self._send_queue = None
 
-  def set_params(self, params, url=None):
+  def set_params(self, params: dict = {}, url: str = None) -> None:
     qs_params = {"vsn": "1.0.0", **params}
     if url:
       self._url = url
@@ -99,6 +83,8 @@ class Client:
         if message:
           await websocket.send(message)
         send_queue.task_done()
+    except asyncio.exceptions.CancelledError:
+      logging.info("phxsocket: broadcast queue finished")
     except:
       logging.error("phxsocket: FATAL ERROR: " + traceback.format_exc())
 
@@ -130,7 +116,7 @@ class Client:
       else:
         logging.error("phxsocket: " + traceback.format_exc())
     finally:
-      for task in asyncio.Task.all_tasks(loop):
+      for task in asyncio.all_tasks(loop):
         task.cancel()
 
       # notify self._broadcast
@@ -141,14 +127,14 @@ class Client:
       if connect_evt.is_set() and self.on_close:
         self.on_close(self)
 
-  def close(self):
+  def close(self) -> None:
     if not self._loop:
       raise SocketClosedError
 
     self._loop.call_soon_threadsafe(self._shutdown_evt.set)
     self.thread.join()
 
-  def connect(self, blocking=True):
+  def connect(self, blocking: bool = True) -> Union[ClientConnection, None]:
     if self._loop:
       logging.error("phxsocket: Trying to start another thread")
       return False
@@ -180,7 +166,12 @@ class Client:
     if self.on_message:
       Thread(target=self.on_message, args=[message], daemon=True).start()
 
-  def push(self, topic, event, payload, cb=None, reply=False):
+  def push(self,
+           topic: str,
+           event: Union[ChannelEvents, str],
+           payload: Union[dict, list, str, int, float, bool],
+           cb: Callable = None,
+           reply: bool = False) -> Union[SentMessage, None]:
     if not self._loop:
       raise SocketClosedError
 
@@ -208,7 +199,7 @@ class Client:
     if reply or cb:
       return sent_message
 
-  def channel(self, topic, params={}):
+  def channel(self, topic: str, params: dict = {}) -> Channel:
     if topic not in self.channels:
       channel = Channel(self, topic, params)
       self.channels[topic] = channel

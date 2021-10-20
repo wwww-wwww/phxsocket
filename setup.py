@@ -8,7 +8,7 @@ with open("requirements.txt") as fh:
 
 setup(
   name="phxsocket",
-  version="0.1.0",
+  version="0.1.2",
   author="wwwwwwww",
   author_email="wvvwvvvvwvvw@gmail.com",
   description="Websocket client for Phoenix Elixir",
@@ -22,5 +22,5 @@ setup(
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
   ],
-  python_requires=">=3.6",
+  python_requires=">=3.7",
 )

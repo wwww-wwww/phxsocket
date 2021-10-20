@@ -12,21 +12,21 @@ import phxsocket
 
 Create socket client
 ```python
-socket = phxsocket.Client("wss://target.url/websocket", {"options": "something"})
+socket = phxsocket.Client("wss://target.url/channel/websocket", {"options": "something"})
 ```
 
 Connect and join a channel
 ```python
 if socket.connect(): # blocking, raises exception on failure
   channel = socket.channel("room:roomname", {"more options": "something else"})
-  join_success, resp = channel.join()
+  resp = channel.join() # also blocking, raises exception on failure
 ```
 
 Alternatively
 ```python
 def connect_to_channel(socket):
   channel = socket.channel("room:roomname", {"more options": "something else"})
-  join_success, resp = channel.join()
+  resp = channel.join()
   
 socket.on_open = connect_to_channel
 connection = socket.connect(blocking=False)

@@ -1,4 +1,6 @@
 from enum import Enum
+from typing import Union, Callable, Tuple
+from .message import SentMessage
 import traceback
 
 
@@ -23,7 +25,7 @@ class Channel:
     self.on_close = None
     self.events = {}
 
-  def join(self):
+  def join(self) -> Union[dict, list, str, int, float, bool]:
     join = self.socket.push(self.topic,
                             ChannelEvents.join,
                             self.params,
@@ -35,7 +37,7 @@ class Channel:
 
     return response["response"]
 
-  def leave(self):
+  def leave(self) -> Tuple[bool, Union[dict, list, str, int, float, bool]]:
     leave = self.socket.push(self.topic,
                              ChannelEvents.leave,
                              self.params,
@@ -45,11 +47,17 @@ class Channel:
     except:
       return False, traceback.format_exc()
 
-  def push(self, event, payload, cb=None, reply=False):
+  def push(self,
+           event: Union[ChannelEvents, str],
+           payload: Union[dict, list, str, int, float, bool],
+           cb: Callable = None,
+           reply: bool = False) -> Union[SentMessage, None]:
     msg = self.socket.push(self.topic, event, payload, cb, reply)
     return msg
 
-  def on(self, event, cb):
+  def on(
+      self, event: Union[ChannelEvents, str],
+      cb: Callable[[Union[dict, list, str, int, float, bool]], None]) -> None:
     self.events[event] = cb
 
   def receive(self, socket, message):
