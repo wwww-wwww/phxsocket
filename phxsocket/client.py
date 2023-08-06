@@ -95,8 +95,7 @@ class Client:
       listen = loop.create_task(self._listen(websocket))
       shutdown = loop.create_task(shutdown_evt.wait())
       await asyncio.wait({listen, shutdown, broadcast},
-                         return_when=asyncio.FIRST_COMPLETED,
-                         loop=loop)
+                         return_when=asyncio.FIRST_COMPLETED)
 
   def run(self, connect_evt):
     self._loop = loop = asyncio.new_event_loop()
