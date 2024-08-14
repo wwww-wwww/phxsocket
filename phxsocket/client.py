@@ -1,9 +1,14 @@
-import asyncio, websockets, json, logging, traceback
 from threading import Thread, Lock
 from urllib.parse import urlencode
 from .channel import Channel, ChannelEvents
 from .message import Message, SentMessage
 from typing import Union, Callable
+from time import sleep
+import asyncio
+import websockets
+import json
+import logging
+import traceback
 
 
 class SocketClosedError(Exception):
@@ -11,6 +16,7 @@ class SocketClosedError(Exception):
 
 
 class ClientConnection(SentMessage):
+
   def __init__(self, client):
     super().__init__()
     self.client = client
@@ -39,6 +45,7 @@ class ClientConnection(SentMessage):
 
 
 class Client:
+
   def __init__(self, url: str, params: dict = {}):
     self._url = url
     self.set_params(params)
@@ -59,6 +66,8 @@ class Client:
     self.thread = None
 
     self._send_queue = None
+
+    self.heartbeat_interval = 5
 
   def set_params(self, params: dict = {}, url: str = None) -> None:
     qs_params = {"vsn": "1.0.0", **params}
@@ -94,8 +103,11 @@ class Client:
       broadcast = loop.create_task(self._broadcast(websocket, send_queue))
       listen = loop.create_task(self._listen(websocket))
       shutdown = loop.create_task(shutdown_evt.wait())
+      alive = [True]
+      Thread(target=self.heartbeat, args=[alive]).start()
       await asyncio.wait({listen, shutdown, broadcast},
                          return_when=asyncio.FIRST_COMPLETED)
+      alive[0] = False
 
   def run(self, connect_evt):
     self._loop = loop = asyncio.new_event_loop()
@@ -106,7 +118,7 @@ class Client:
 
     try:
       loop.run_until_complete(
-        self._run(loop, self._send_queue, connect_evt, self._shutdown_evt))
+          self._run(loop, self._send_queue, connect_evt, self._shutdown_evt))
     except Exception as e:
       if not connect_evt.is_set():
         connect_evt.respond(e)
@@ -150,7 +162,7 @@ class Client:
   def _on_message(self, _message):
     message = Message.from_json(_message)
 
-    if message.event == ChannelEvents.reply.value and message.ref in self.messages:
+    if message.event == ChannelEvents.REPLY.value and message.ref in self.messages:
       self.messages[message.ref].respond(message.payload)
     else:
       channel = self.channels.get(message.topic)
@@ -182,10 +194,10 @@ class Client:
       self._ref += 1
 
     message = json.dumps({
-      "event": event,
-      "topic": topic,
-      "ref": ref,
-      "payload": payload
+        "event": event,
+        "topic": topic,
+        "ref": ref,
+        "payload": payload
     })
 
     sent_message = SentMessage(cb)
@@ -206,3 +218,8 @@ class Client:
       self.channels[topic].params = params
 
     return self.channels[topic]
+
+  def heartbeat(self, alive):
+    while alive[0]:
+      self.push("phoenix", ChannelEvents.HEARTBEAT, {})
+      sleep(self.heartbeat_interval)

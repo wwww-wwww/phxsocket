@@ -9,11 +9,12 @@ class ChannelConnectError(Exception):
 
 
 class ChannelEvents(Enum):
-  close = "phx_close"
-  error = "phx_error"
-  join = "phx_join"
-  reply = "phx_reply"
-  leave = "phx_leave"
+  CLOSE = "phx_close"
+  ERROR = "phx_error"
+  JOIN = "phx_join"
+  REPLY = "phx_reply"
+  LEAVE = "phx_leave"
+  HEARTBEAT = "heartbeat"
 
 
 class Channel:
@@ -27,7 +28,7 @@ class Channel:
 
   def join(self) -> Union[dict, list, str, int, float, bool]:
     join = self.socket.push(self.topic,
-                            ChannelEvents.join,
+                            ChannelEvents.JOIN,
                             self.params,
                             reply=True)
 
@@ -39,7 +40,7 @@ class Channel:
 
   def leave(self) -> Tuple[bool, Union[dict, list, str, int, float, bool]]:
     leave = self.socket.push(self.topic,
-                             ChannelEvents.leave,
+                             ChannelEvents.LEAVE,
                              self.params,
                              reply=True)
     try:
@@ -61,7 +62,7 @@ class Channel:
     self.events[event] = cb
 
   def receive(self, socket, message):
-    if message.event == ChannelEvents.close.value:
+    if message.event == ChannelEvents.CLOSE.value:
       if self.on_close:
         self.on_close()
     else:
