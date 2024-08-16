@@ -104,7 +104,7 @@ class Client:
       listen = loop.create_task(self._listen(websocket))
       shutdown = loop.create_task(shutdown_evt.wait())
       alive = [True]
-      Thread(target=self.heartbeat, args=[alive]).start()
+      Thread(target=self.heartbeat, args=[alive], daemon=True).start()
       await asyncio.wait({listen, shutdown, broadcast},
                          return_when=asyncio.FIRST_COMPLETED)
       alive[0] = False
